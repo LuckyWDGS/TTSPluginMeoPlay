@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--GearVR plugin additions-->
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+	<!-- init section is always evaluated once per architecture -->
+	<trace enable="true"/>
+	<init>
+		<log text="AndroidAPITemplate init"/>		
+	</init>
+
+  <androidManifestUpdates>
+    
+		
+  </androidManifestUpdates>
+
+  <!-- optional additions to proguard -->
+  <proguardAdditions>
+    <insert><![CDATA[
+      -keepattributes Signature
+      -dontskipnonpubliclibraryclassmembers
+
+     -keepclassmembers class com.epicgames.ue4.GameActivity {
+            public <methods>;
+            public <fields>;
+     }
+    ]]></insert>
+  </proguardAdditions>
+
+  <resourceCopies>
+    <!-- Copy the generated resource file to be packaged -->
+  </resourceCopies>
+
+  <AARImports>
+  </AARImports>
+  
+  <!-- optional additions to the GameActivity imports in GameActivity.java -->
+	<gameActivityImportAdditions>
+	  <insert>
+      import java.util.HashSet;
+      import java.util.Arrays;
+      import android.text.TextUtils;
+      import android.os.Handler;
+      import android.speech.tts.TextToSpeech;
+      import java.util.Locale;
+      import android.util.Log;
+    </insert>
+	</gameActivityImportAdditions>
+	
+
+	<!-- optional additions to the GameActivity class in GameActivity.java -->
+	<gameActivityClassAdditions>
+		<insert>
+		<![CDATA[
+    
+    private TextToSpeech t1 = null;
+       
+		
+		public void AndroidThunkJava_AndroidTTSInit() {
+    
+         android.util.Log.d("AndroidTTS","UPL Init tts");
+    
+         t1=new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+         @Override
+         public void onInit(int status) {
+            if(status != TextToSpeech.ERROR) {
+               android.util.Log.d("AndroidTTS","UPL Init tts no error");
+               t1.setLanguage(Locale.getDefault());
+            }
+            else{
+              android.util.Log.d("AndroidTTS","UPL Init tts error " + status);
+            }
+         }
+      });      
+		}
+    
+    
+		public void AndroidThunkJava_AndroidTTSSpeech(String speech, float speechRate, String language) {			
+      android.util.Log.d("AndroidTTS","UPL tts speech " + speech + " language " + language);
+    
+      if(language.equals("default")){
+       android.util.Log.d("AndroidTTS","UPL tts speech default language");
+       t1.setLanguage(Locale.getDefault());
+      }
+      else{
+        android.util.Log.d("AndroidTTS","UPL tts speech "+ language + " language");
+         t1.setLanguage(new Locale(language));
+      }
+       String toSpeak = speech;
+       t1.setSpeechRate(speechRate);
+       t1.speak(toSpeak, TextToSpeech.QUEUE_FLUSH, null);
+		}
+      
+    
+		]]>
+		</insert>
+	</gameActivityClassAdditions>
+	
+	<!-- optional additions to GameActivity onCreate metadata reading in GameActivity.java -->
+	<gameActivityReadMetadataAdditions>
+	<insert>
+
+  </insert>
+	</gameActivityReadMetadataAdditions>
+	
+	<!-- optional additions to GameActivity onCreate in GameActivity.java -->
+	<gameActivityOnCreateAdditions>
+		<insert>
+		<![CDATA[
+		]]>
+		</insert>
+	</gameActivityOnCreateAdditions>
+
+	<!-- optional additions to GameActivity onDestroy in GameActivity.java -->
+	<gameActivityOnDestroyAdditions>
+		<insert>
+		
+		</insert>
+	</gameActivityOnDestroyAdditions>
+	
+	
+	<!-- optional additions to GameActivity onStart in GameActivity.java -->
+	<gameActivityOnStartAdditions>
+		<insert>
+		
+		</insert>
+	</gameActivityOnStartAdditions>
+
+	<!-- optional additions to GameActivity onStop in GameActivity.java -->
+	<gameActivityOnStopAdditions>
+		<insert>
+		
+		</insert>
+	</gameActivityOnStopAdditions>
+	
+
+	<!-- optional additions to GameActivity onPause in GameActivity.java	-->
+	<gameActivityOnPauseAdditions>
+    <insert>
+    <![CDATA[
+    ]]>
+    </insert>
+  </gameActivityOnPauseAdditions>
+
+
+  <!-- optional additions to GameActivity onResume in GameActivity.java	-->
+  <gameActivityOnResumeAdditions>
+    <insert>
+    </insert>
+  </gameActivityOnResumeAdditions>
+
+
+	<!-- optional additions to GameActivity onActivityResult in GameActivity.java -->
+	<gameActivityOnActivityResultAdditions>
+		<insert>
+		</insert>
+    </gameActivityOnActivityResultAdditions>
+	
+
+	<!-- optional libraries to load in GameActivity.java before libUE4.so -->
+	<soLoadLibrary>
+		<!-- need this if plugin enabled and supported architecture, even if not packaged for GearVR -->
+	</soLoadLibrary>
+</root>

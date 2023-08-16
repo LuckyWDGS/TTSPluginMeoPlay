@@ -1,0 +1,30 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "TTSUniversalPluginMeoPlay",
+	"Description": "This plugin allows you to use offline native Text-To-Speech on Windows, Android, iOS",
+	"Category": "Other",
+	"CreatedBy": "MeoPlay",
+	"CreatedByURL": "https://www.meooplay.com",
+	"DocsURL": "",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/fcc4de68b1134d99b4f20e57456953aa",
+	"SupportURL": "",
+	"EngineVersion": "5.2.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "TTSUniversalPluginMeoPlay",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Linux",
+				"Mac",
+				"IOS",
+				"Android"
+			]
+		}
+	]
+}
