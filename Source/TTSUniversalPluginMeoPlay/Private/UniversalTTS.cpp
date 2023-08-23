@@ -23,7 +23,10 @@ static jmethodID AndroidThunkJava_AndroidTTSSpeech;
 #import "AVFoundation/AVFoundation.h"
 #endif
 
-
+#if PLATFORM_WINDOWS
+#include <iostream>
+#include <fstream>
+#endif
 
 #if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
@@ -70,10 +73,11 @@ extern CComModule _Module;
 #pragma warning(pop)
 #include "Windows/HideWindowsPlatformTypes.h"
 
-
+#define SPCAT_VOICES L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices"
 
 
 #endif
+
 
 #if PLATFORM_WINDOWS
 std::wstring utf8_to_utf16(const std::string& utf8)
@@ -175,35 +179,6 @@ void UUniversalTTS::TTSInitLib()
 #endif
 }
 
-void UUniversalTTS::TTSGetAllToken()
-{
-	TArray<FString> OutString;
-#if PLATFORM_WINDOWS
-	TFuture<void> Result = Async(EAsyncExecution::Thread, [=]() {
-		CComPtr<ISpObjectToken>        cpVoiceToken;
-		CComPtr<IEnumSpObjectTokens>   cpEnum;
-		CComPtr<ISpVoice>              cpvoice;
-		ULONG                          ulCount = 0;
-		// Enumerate the installed voices.
-		if (SUCCEEDED(SpEnumTokens(SPCAT_VOICES, NULL, NULL, &cpEnum))) {
-			// 依次获取每个token并朗读字符串
-			while (SUCCEEDED(cpEnum->Next(1, &cpVoiceToken, NULL)) && cpVoiceToken != NULL) {
-				CComPtr<ISpDataKey> attributes;
-				if (S_OK == cpVoiceToken->OpenKey(L"Attributes", &attributes)) {
-
-					WCHAR* languageWCHAR;
-					WCHAR* NameWCHAR;
-					if (S_OK == attributes->GetStringValue(L"Language", &languageWCHAR) && S_OK == attributes->GetStringValue(L"Name", &NameWCHAR)) {
-						UE_LOG(LogTemp, Error, TEXT("语言是啥--->>>%s,名称是啥--->>>%s"), languageWCHAR, NameWCHAR);
-					}
-				}
-			}
-			cpEnum.Release();        // 释放pSpEnumTokens接口
-		}
-	});
-#endif
-}
-
 bool UUniversalTTS::TTSFindBestToken(FString Name)
 {
 	FString TmpName;
@@ -215,139 +190,10 @@ bool UUniversalTTS::TTSFindBestToken(FString Name)
 	return false;
 }
 
-void UUniversalTTS::TTSSpeechWindows(const FString& speech, const FString& Name, int speechRateWindows)
+void UUniversalTTS::SpeechToText(const FString& FileName, FString& Text)
 {
-	bool showDebugLog = false;
-	FString speechlambda = speech;
-	FString Namelambda = Name;
-	Namelambda = L"Name=" + Name;
 	TFuture<void> Result = Async(EAsyncExecution::Thread, [=]() {
-		CComPtr<ISpObjectToken>        cpVoiceToken;
-		CComPtr<IEnumSpObjectTokens>   cpEnum;
-		CComPtr<ISpVoice>              cpvoice;
-		ULONG                          ulCount = 0;
-
-		HRESULT hr = S_OK;
-		// Create the voice.
-		hr = cpvoice.CoCreateInstance(CLSID_SpVoice);
-
-
-
-		bool foundMatchingLanguage = false;
-
-		CComPtr<ISpObjectToken> cpToken;
-		if (!Namelambda.IsEmpty()) {
-			if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech using not default %s"), *Namelambda);
-
-			SpFindBestToken(SPCAT_VOICES, *Namelambda, NULL, &cpToken);
-			// SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
-		}
-		else {
-			if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech using default"));
-			if (SUCCEEDED(hr))
-			{
-				// Enumerate the installed voices.
-				hr = SpEnumTokens(SPCAT_VOICES, NULL, NULL, &cpEnum);
-			}
-
-			if (SUCCEEDED(hr))
-			{
-				// Get the number of voices.
-				hr = cpEnum->GetCount(&ulCount);
-			}
-
-			//SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
-			SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
-			bool didFindTTS = false;
-
-			while (SUCCEEDED(hr) && ulCount--)
-			{
-				cpVoiceToken.Release();
-
-				if (SUCCEEDED(hr))
-				{
-					hr = cpEnum->Next(1, &cpVoiceToken, NULL);
-					cpToken = cpVoiceToken;
-				}
-
-
-				WCHAR* description;
-				if (S_OK == SpGetDescription(cpVoiceToken, &description))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Available voice: %s"), description);
-				}
-				else
-				{
-					return;
-				}
-
-
-				CComPtr<ISpDataKey> attributes;
-				if (S_OK != cpVoiceToken->OpenKey(L"Attributes", &attributes))
-					return;
-
-				WCHAR* languageWCHAR;
-				if (S_OK != attributes->GetStringValue(L"Language", &languageWCHAR))
-					return;
-
-				LCID lcidlanguage = wcstol(languageWCHAR, NULL, 16);
-				WCHAR tmpwchar[LOCALE_NAME_MAX_LENGTH * 3];
-				LPWSTR languagelocale = &(tmpwchar[0]);
-
-				LCIDToLocaleName(lcidlanguage, languagelocale, LOCALE_NAME_MAX_LENGTH, LOCALE_ALLOW_NEUTRAL_NAMES);
-				FString languagestrhex(languageWCHAR);
-				FString languagestrlocale(languagelocale);
-
-
-				if (Name == languagestrlocale) {
-					if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech found matching language break loop %s "), *languagestrlocale);
-					didFindTTS = true;
-					break;
-				}
-			}
-			// default voice if no matching found
-			if (didFindTTS == false) {
-					SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
-			}
-		}
-
-
-		if (cpvoice == NULL || cpToken == NULL) {
-			if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech cpvoice or cpToken null"));
-			return;
-		}
-
-		cpvoice->SetVoice(cpToken);
-		char* text = TCHAR_TO_UTF8(*speechlambda);
-
-		//UTF-8 to UTF-16 
-		std::string sourceutf8(text);
-		//std::wstring_convert<std::codecvt_utf8_utf16<__int16>, __int16> convert;
-		//std::u16string dest = convert.from_bytes(sourceutf8);
-
-		//std::wstring_convert<std::codecvt_utf8_utf16<int16_t>, int16_t> convert;
-		//auto p = reinterpret_cast<const char *>(sourceutf8.data());
-		//wide_string dest = convert.from_bytes(p, p + sourceutf8.size());
-
-		std::wstring utf16str = utf8_to_utf16(sourceutf8);
-
-		if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("char16_t size %d"), sizeof(char16_t));
-
-
-		wchar_t* wtext = (wchar_t*)malloc(sizeof(wchar_t) * utf16str.size() * 2 + 10);//(wchar_t*)malloc(sizeof(wchar_t) * strlen(text) * 2 + 10
-		memset(wtext, 0, sizeof(wchar_t) * utf16str.size() * 2 + 10);
-		memcpy(wtext, utf16str.data(), sizeof(wchar_t) * utf16str.size());
-		//size_t outSize;
-		//mbstowcs_s(&outSize, wtext, strlen(text) * 2 + 10, text, strlen(text) + 1);
-		LPWSTR ptr = wtext;
-
-		cpvoice->SetRate(speechRateWindows);
-		hr = cpvoice->Speak(ptr, SPF_DEFAULT, NULL);
-		free(wtext);
-		cpToken.Release();
-
 		});
-
 }
 
 void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoosed, float speechRateAndroid, float speechRateIOS, int speechRateWindows)
@@ -367,15 +213,12 @@ void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoo
 		// Create the voice.
 		hr = cpvoice.CoCreateInstance(CLSID_SpVoice);
 
-	
-
 		bool foundMatchingLanguage = false;
 
 		CComPtr<ISpObjectToken> cpToken;
 		if (languagelambda == "default") {
 			if(showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech using default"));
-			SpFindBestToken(SPCAT_VOICES, L"", L"Name=MicrosoftKangkang", &cpToken);
-			// SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
+			 SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
 		}
 		else {
 			if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech using not default %s"), *languagelambda);
@@ -392,7 +235,6 @@ void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoo
 				hr = cpEnum->GetCount(&ulCount);
 			}
 			
-			//SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
 			SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
 			bool didFindTTS = false;
 
@@ -405,8 +247,6 @@ void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoo
 					hr = cpEnum->Next(1, &cpVoiceToken, NULL);
 					cpToken = cpVoiceToken;
 				}
-		
-
 				WCHAR *description;
 				if (S_OK == SpGetDescription(cpVoiceToken, &description))
 				{
@@ -416,8 +256,6 @@ void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoo
 				{
 					return ;
 				}
-
-
 				CComPtr<ISpDataKey> attributes;
 				if (S_OK != cpVoiceToken->OpenKey(L"Attributes", &attributes))
 					return ;
@@ -443,9 +281,7 @@ void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoo
 			}
 			// default voice if no matching found
 			if (didFindTTS == false) {
-			//	SpFindBestToken(SPCAT_VOICES, L"language=804", L"Name=Microsoft Kangkang", &cpToken);
-
-				// SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
+				SpFindBestToken(SPCAT_VOICES, L"", L"", &cpToken);
 			}
 		}
 
@@ -523,4 +359,126 @@ void UUniversalTTS::TTSSpeech(const FString& speech, const FString& languageChoo
 #endif
 
 
+}
+
+
+void USpeakStream::Activate()
+{
+
+	bool showDebugLog = false;
+	FString speechlambda = Speech;
+	FString Namelambda = Name;
+	Namelambda = L"Name=" + Name;
+	LPWSTR filePath = L"D:/迅雷下载/1.wav";
+	TFuture<void> Result = Async(EAsyncExecution::Thread, [=]() {
+		CComPtr<ISpObjectToken>        cpVoiceToken;
+		CComPtr<IEnumSpObjectTokens>   cpEnum;
+		CComPtr<ISpVoice>              cpvoice;
+		ULONG                          ulCount = 0;
+		HRESULT hr = S_OK;
+		// Create the voice.
+		hr = cpvoice.CoCreateInstance(CLSID_SpVoice);
+		bool foundMatchingLanguage = false;
+		CComPtr<ISpObjectToken> cpToken;
+
+		SpFindBestToken(SPCAT_VOICES, *Namelambda, NULL, &cpToken);
+		if (cpvoice == NULL || cpToken == NULL) {
+			if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("windows TTSSpeech cpvoice or cpToken null"));
+			return;
+		}
+
+		cpvoice->SetVoice(cpToken);
+		char* text = TCHAR_TO_UTF8(*speechlambda);
+
+		//UTF-8 to UTF-16 
+		std::string sourceutf8(text);
+		std::wstring utf16str = utf8_to_utf16(sourceutf8);
+		if (showDebugLog) UE_LOG(LogTemp, Warning, TEXT("char16_t size %d"), sizeof(char16_t));
+
+		wchar_t* wtext = (wchar_t*)malloc(sizeof(wchar_t) * utf16str.size() * 2 + 10);//(wchar_t*)malloc(sizeof(wchar_t) * strlen(text) * 2 + 10
+		memset(wtext, 0, sizeof(wchar_t) * utf16str.size() * 2 + 10);
+		memcpy(wtext, utf16str.data(), sizeof(wchar_t) * utf16str.size());
+
+		LPWSTR ptr = wtext;
+
+		cpvoice->SetRate(SpeechRateWindows);
+		cpvoice->Speak(ptr, SPF_DEFAULT, NULL);
+
+		//播放语音流
+		CComPtr<ISpStream> cpISpStream;
+		CComPtr<ISpStreamFormat> cpISpStreamFormat;
+		CSpStreamFormat spStreamFormat;
+		cpvoice->GetOutputStream(&cpISpStreamFormat);
+		spStreamFormat.AssignFormat(cpISpStreamFormat);
+		HRESULT hResult = SPBindToFile(filePath,
+			SPFM_CREATE_ALWAYS,
+			&cpISpStream,
+			&spStreamFormat.FormatId(),
+			spStreamFormat.WaveFormatExPtr());
+		if (SUCCEEDED(hResult))
+		{
+			cpvoice->SetOutput(cpISpStream, true);
+			cpvoice->Speak(ptr, SPF_DEFAULT, NULL);
+		}
+	});
+	// 等待输入流结束
+	Result.Wait();
+	TArray<uint8> RawWaveData;
+	FFileHelper::LoadFileToArray(RawWaveData, filePath);
+	FWaveModInfo WaveInfo;
+	if (!WaveInfo.ReadWaveInfo(RawWaveData.GetData(), RawWaveData.Num()))
+	{
+		return;
+	}
+
+	USoundWave* SoundWave = NewObject<USoundWave>();
+	int32 ChannelCount = (int32)*WaveInfo.pChannels;
+	check(ChannelCount > 0);
+	int32 SizeOfSample = (*WaveInfo.pBitsPerSample) / 8;
+	int32 NumSamples = WaveInfo.SampleDataSize / SizeOfSample;
+	int32 NumFrames = NumSamples / ChannelCount;
+
+	SoundWave->RawData.UpdatePayload(FSharedBuffer::Clone(RawWaveData.GetData(), RawWaveData.Num()));
+	SoundWave->RawPCMData = (uint8*)FMemory::Malloc(WaveInfo.SampleDataSize);
+	FMemory::Memcpy(SoundWave->RawPCMData, WaveInfo.SampleDataStart, WaveInfo.SampleDataSize);
+	SoundWave->RawPCMDataSize = WaveInfo.SampleDataSize;
+	// Set Sound Wave Info
+	SoundWave->Duration = (float)NumFrames / *WaveInfo.pSamplesPerSec;
+	SoundWave->SetSampleRate(*WaveInfo.pSamplesPerSec);
+	SoundWave->NumChannels = ChannelCount;
+	SoundWave->TotalSamples = *WaveInfo.pSamplesPerSec * SoundWave->Duration;
+	OnSuccess.Broadcast(SoundWave);
+
+}
+
+void USpeakToken::Activate()
+{
+	TArray< FTokens> OutString;
+#if PLATFORM_WINDOWS
+	TFuture<void> Result = Async(EAsyncExecution::Thread, [&]() {
+		CComPtr<ISpObjectToken>        cpVoiceToken;
+		CComPtr<IEnumSpObjectTokens>   cpEnum;
+		CComPtr<ISpVoice>              cpvoice;
+		ULONG                          ulCount = 0;
+		FTokens Token;
+		// Enumerate the installed voices.
+		if (SUCCEEDED(SpEnumTokens(SPCAT_VOICES, NULL, NULL, &cpEnum))) {
+			// 依次获取每个token并朗读字符串
+			while (SUCCEEDED(cpEnum->Next(1, &cpVoiceToken, NULL)) && cpVoiceToken != NULL) {
+				CComPtr<ISpDataKey> attributes;
+				if (S_OK == cpVoiceToken->OpenKey(L"Attributes", &attributes)) {
+					WCHAR* languageWCHAR;
+					WCHAR* NameWCHAR;
+					if (S_OK == attributes->GetStringValue(L"Language", &languageWCHAR) && S_OK == attributes->GetStringValue(L"Name", &NameWCHAR)) {
+						UE_LOG(LogTemp, Error, TEXT("语言是啥--->>>%s,名称是啥--->>>%s"), languageWCHAR, NameWCHAR);
+						Token.AddToken(languageWCHAR, NameWCHAR);
+						OutString.Add(Token);
+					}
+				}
+			}
+			OnSuccess.Broadcast(OutString);
+			cpEnum.Release();        // 释放pSpEnumTokens接口
+		}
+		});
+#endif
 }
